@@ -1,7 +1,9 @@
 package it.polito.mec.video.raven;
 
+import android.app.Application;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -44,6 +46,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        ((TextView) findViewById(R.id.versionName)).setText(getVersionName());
+
         updateCurrentServer();
     }
 
@@ -52,7 +56,7 @@ public class MainActivity extends AppCompatActivity {
         updateCurrentServer();
     }
 
-    private void updateCurrentServer(){
+    private void updateCurrentServer() {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         String IPKey = getString(R.string.pref_key_server_ip);
         String portKey = getString(R.string.pref_key_server_port);
@@ -61,4 +65,13 @@ public class MainActivity extends AppCompatActivity {
         mCurServerTV.setText(String.format("SERVER\n%s:%s", IP, port));
     }
 
+    public String getVersionName() {
+        String versionName = "unknwon";
+        try {
+            versionName = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            e.printStackTrace();
+        }
+        return versionName;
+    }
 }
