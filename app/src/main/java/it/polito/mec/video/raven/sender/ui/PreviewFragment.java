@@ -23,9 +23,12 @@ import android.widget.Toast;
 import java.util.List;
 
 import it.polito.mec.video.raven.R;
-import it.polito.mec.video.raven.sender.encoding.*;
+import it.polito.mec.video.raven.network_delay.Sync;
+import it.polito.mec.video.raven.sender.encoding.Params;
+import it.polito.mec.video.raven.sender.encoding.SimpleEncodingListener;
 import it.polito.mec.video.raven.sender.net.WSClientImpl;
-import it.polito.mec.video.raven.sender.record.*;
+import it.polito.mec.video.raven.sender.record.AbsCamcorder;
+import it.polito.mec.video.raven.sender.record.NativeRecorderImpl;
 
 @SuppressWarnings("deprecation")
 public class PreviewFragment extends Fragment {
@@ -33,7 +36,7 @@ public class PreviewFragment extends Fragment {
     private static final String TAG = "PREVIEW";
 
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 1;
-    private static final String[] PERMISSIONS = new String[]{ Manifest.permission.CAMERA };
+    private static final String[] PERMISSIONS = new String[]{Manifest.permission.CAMERA};
     //By default, camera permission is granted.
     //If current API is >= 23, it is denied until user explicitly grants it
     private boolean mCameraPermissionGranted = (Build.VERSION.SDK_INT < 23);
@@ -62,7 +65,7 @@ public class PreviewFragment extends Fragment {
             List<Params> params = mRecorder.getPresets();
             int curIdx = params.indexOf(mRecorder.getCurrentParams());
             mClient.sendHelloMessage2(params, curIdx);
-            Toast.makeText(getContext(), "Connected to "+uri, Toast.LENGTH_SHORT).show();
+            Toast.makeText(getContext(), "Connected to " + uri, Toast.LENGTH_SHORT).show();
         }
 
         @Override
@@ -83,37 +86,36 @@ public class PreviewFragment extends Fragment {
 
         @Override
         public void onBandwidthChange(int Kbps, double performancesPercentage) {
-            Log.d(TAG, "BANDWIDTH UTILIZATION: "+performancesPercentage+" %");
-            try{
-                if (performancesPercentage == 100.0){
-                    if (mRecorder.switchToHigherQuality()){
-                        Log.d(TAG, "Switched to: "+mRecorder.getCurrentParams());
+            Log.d(TAG, "BANDWIDTH UTILIZATION: " + performancesPercentage + " %");
+            try {
+                if (performancesPercentage == 100.0) {
+                    if (mRecorder.switchToHigherQuality()) {
+                        Log.d(TAG, "Switched to: " + mRecorder.getCurrentParams());
+                    }
+                } else {
+                    if (mRecorder.switchToLowerQuality()) {
+                        Log.d(TAG, "Switched to: " + mRecorder.getCurrentParams());
                     }
                 }
-                else {
-                    if (mRecorder.switchToLowerQuality()){
-                        Log.d(TAG, "Switched to: "+mRecorder.getCurrentParams());
-                    }
-                }
-            }catch(Exception ex){
+            } catch (Exception ex) {
                 Log.w(TAG, ex.getMessage());
             }
         }
 
         @Override
         public void onResetReceived(int w, int h, int kbps) {
-            if (mAutoDetectQuality){
+            if (mAutoDetectQuality) {
                 Log.d(TAG, "Ignoring RESET from server: Auto detect quality enabled");
                 return;
             }
             Params newParams = new Params.Builder().width(w).height(h).bitRate(kbps).build();
-            if (mRecorder.getPresets().contains(newParams)){
+            if (mRecorder.getPresets().contains(newParams)) {
                 mRecorder.switchToVideoQuality(newParams);
                 return;
             }
             List<Params> compatibleParams = Params.getNearestPresets(newParams.getSize());
-            if (compatibleParams.isEmpty()){
-                Log.w(TAG, "Cannot reset. "+newParams+" is not available for this device");
+            if (compatibleParams.isEmpty()) {
+                Log.w(TAG, "Cannot reset. " + newParams + " is not available for this device");
                 return;
             }
             Params target = compatibleParams.get(compatibleParams.size() - 1);
@@ -122,13 +124,11 @@ public class PreviewFragment extends Fragment {
 
     };
 
-    public PreviewFragment() { }
-
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mPreferences = PreferenceManager.getDefaultSharedPreferences(getContext());
-        mClient = new WSClientImpl(mWebSocketListener);
+        mClient = new WSClientImpl(mWebSocketListener, (Sync) getActivity().getApplication());
         mRecorder = new NativeRecorderImpl(getContext());
     }
 
@@ -152,11 +152,10 @@ public class PreviewFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        if (!hasPermissions(PERMISSIONS)){
+        if (!hasPermissions(PERMISSIONS)) {
             requestPermissions(PERMISSIONS, CAMERA_PERMISSION_REQUEST_CODE);
             return;
-        }
-        else{
+        } else {
             mCameraPermissionGranted = true;
             setupCameraRecorder();
         }
@@ -169,7 +168,7 @@ public class PreviewFragment extends Fragment {
             mRecorder.clearEncodingListeners();
             mRecorder.closeCamera();
         }
-        if (mClient.isOpen()){
+        if (mClient.isOpen()) {
             mClient.closeConnection();
         }
         super.onPause();
@@ -178,13 +177,12 @@ public class PreviewFragment extends Fragment {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE){
-            for (int i=0; i<permissions.length; i++){
-                if (permissions[i].equals(Manifest.permission.CAMERA)){
-                    if (grantResults[i] == PackageManager.PERMISSION_GRANTED){
+        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+            for (int i = 0; i < permissions.length; i++) {
+                if (permissions[i].equals(Manifest.permission.CAMERA)) {
+                    if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
                         mCameraPermissionGranted = true;
-                    }
-                    else {
+                    } else {
                         mCameraPermissionGranted = false;
                         Toast.makeText(getContext(), "Camera permission denied", Toast.LENGTH_SHORT).show();
                     }
@@ -193,7 +191,7 @@ public class PreviewFragment extends Fragment {
         }
     }
 
-    private void setupCameraRecorder(){
+    private void setupCameraRecorder() {
         mAutoDetectQuality = mPreferences.getBoolean(getString(R.string.pref_key_adaptivity), false);
         mPresetsSeekBar.setEnabled(!mAutoDetectQuality);
 
@@ -204,17 +202,20 @@ public class PreviewFragment extends Fragment {
                 pause.setEnabled(true);
                 stop.setEnabled(true);
             }
+
             @Override
             public void onParamsChanged(Params actualParams) {
                 int presetIdx = mRecorder.getPresets().indexOf(actualParams);
                 mPresetsSeekBar.setProgress(presetIdx);
             }
+
             @Override
             public void onEncodingPaused() {
                 rec.setEnabled(true);
                 pause.setEnabled(false);
                 stop.setEnabled(false);
             }
+
             @Override
             public void onEncodingStopped() {
                 rec.setEnabled(true);
@@ -251,22 +252,26 @@ public class PreviewFragment extends Fragment {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 Params params = mRecorder.getPresets().get(progress);
-                mPresetsLabel.setText(String.format("(%dx%d) %d Kbps",params.width(), params.height(), params.bitrate()));
-                if (fromUser){
+                mPresetsLabel.setText(String.format("(%dx%d) %d Kbps", params.width(), params.height(), params.bitrate()));
+                if (fromUser) {
                     mRecorder.switchToVideoQuality(params);
                 }
             }
+
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         mRecorder.switchToVideoQuality(mRecorder.getCurrentParams());
     }
 
-    private boolean hasPermissions(String[] permissions){
-        for (String perm : permissions){
+    private boolean hasPermissions(String[] permissions) {
+        for (String perm : permissions) {
             if (ContextCompat.checkSelfPermission(getActivity(), perm) != PackageManager.PERMISSION_GRANTED)
                 return false;
         }
@@ -274,23 +279,26 @@ public class PreviewFragment extends Fragment {
     }
 
 
-    private void setupConnectionButton(boolean connect){
+    private void setupConnectionButton(boolean connect) {
         String text = connect ? "Connect" : "Disconnect";
         View.OnClickListener listener;
-        if (connect){
+        if (connect) {
             listener = new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     //mRecorder.pauseRecording();
                     String ip = mPreferences.getString(getString(R.string.pref_key_server_ip),
                             getString(R.string.pref_server_ip_default_value));
-                    int port = Integer.parseInt(mPreferences.getString(getString(R.string.pref_key_server_port),
-                            getString(R.string.pref_server_port_default_value)));
+                    String port_s = mPreferences.getString(getString(R.string.pref_key_server_port),
+                            getString(R.string.pref_server_port_default_value));
+                    int port = Integer.parseInt(port_s);
+
+                    ((Sync) getActivity().getApplication()).setRemoteSyncUrl(ip, port_s);
+
                     mClient.connect(ip, port, 2000);
                 }
             };
-        }
-        else{
+        } else {
             listener = new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {

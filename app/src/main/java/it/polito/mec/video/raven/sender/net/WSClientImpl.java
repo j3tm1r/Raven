@@ -18,7 +18,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+import it.polito.mec.video.raven.RavenApplication;
 import it.polito.mec.video.raven.VideoChunks;
+import it.polito.mec.video.raven.network_delay.Sync;
 import it.polito.mec.video.raven.sender.Util;
 import it.polito.mec.video.raven.sender.encoding.*;
 
@@ -47,11 +49,14 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
 
     protected WebSocket mWebSocket;
     private Listener mListener;
+    private Sync syncClient;
 
-    public WSClientImpl(Listener listener){
+
+    public WSClientImpl(Listener listener, Sync syncClient) {
         mMainHandler = new Handler(Looper.getMainLooper());
         mMeasureThread = new BandwidthMeasureThread();
         mListener = listener;
+        this.syncClient = syncClient;
     }
 
     @Override
@@ -74,7 +79,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     @Override
     public void onEncodedChunk(VideoChunks.Chunk chunk) {
         if (isOpen()) {
-            sendStreamBytes(chunk);
+            sendStreamBytes(chunk, syncClient.getDrift());
         }
     }
 
@@ -93,7 +98,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         return mWebSocket;
     }
 
-    public boolean isOpen(){
+    public boolean isOpen() {
         return mWebSocket != null && mWebSocket.isOpen();
     }
 
@@ -104,14 +109,14 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         new Thread(new Runnable() {
             @Override
             public void run() {
-                try{
+                try {
                     String mConnectURI = String.format(WS_URI_FORMAT, serverIP, port);
                     mWebSocket = new WebSocketFactory().createSocket(mConnectURI, timeout);
+                    mWebSocket.setAutoFlush(false);
                     mWebSocket.addListener(WSClientImpl.this);
-                    mWebSocket.addHeader("rule","pub");
+                    mWebSocket.addHeader("rule", "pub");
                     mWebSocket.connect();
-                }
-                catch(final Exception e){
+                } catch (final Exception e) {
                     mMainHandler.post(new Runnable() {
                         @Override
                         public void run() {
@@ -145,15 +150,15 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         }
     }*/
 
-    private static String getFormattedParams(Params params){
+    private static String getFormattedParams(Params params) {
         return String.format("%dx%d %d", params.width(), params.height(), params.bitrate());
     }
 
-    public void sendHelloMessage2(List<Params> params, int currentIdx){
+    public void sendHelloMessage2(List<Params> params, int currentIdx) {
         try {
             String device = Util.getCompleteDeviceName();
             List<String> qualities = new ArrayList<>(params.size());
-            for (Params p : params){
+            for (Params p : params) {
                 qualities.add(getFormattedParams(p));
             }
             /*JSONObject configMsg = JSONMessageFactory.createHelloMessage(device, qualities, actualSizeIdx,
@@ -167,7 +172,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         }
     }
 
-    public void sendConfigBytes(final byte[] configData, int width, int height, int encodeBps, int frameRate){
+    public void sendConfigBytes(final byte[] configData, int width, int height, int encodeBps, int frameRate) {
         try {
             JSONObject configMsg = JSONMessageFactory.createConfigMessage(configData, width, height, encodeBps, frameRate);
             mWebSocket.sendText(configMsg.toString());
@@ -183,7 +188,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     private ByteArrayOutputStream baos = new ByteArrayOutputStream();
     private static final int STREAM_HEADER_SIZE = (Integer.SIZE + Long.SIZE) / Byte.SIZE;
 
-    public void sendStreamBytes(final VideoChunks.Chunk chunk){
+    public void sendStreamBytes(final VideoChunks.Chunk chunk, long drift) {
         /*try {
             JSONObject obj = JSONMessageFactory.createStreamMessage(chunk);
             String text = obj.toString();
@@ -197,27 +202,35 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         */
         DataOutputStream dos = new DataOutputStream(baos);
         byte[] payload = null;
-        try{
+        try {
             dos.writeInt(chunk.flags);
-            dos.writeLong(chunk.presentationTimestampUs);
+            dos.writeLong(System.currentTimeMillis() + drift);
             dos.write(chunk.data);
             payload = baos.toByteArray();
 
             assert (payload.length == (STREAM_HEADER_SIZE + chunk.data.length));
             totalBytesToSend.addAndGet(payload.length);
             contToSend.incrementAndGet();
-            if (payload != null) mWebSocket.sendBinary(payload);
-        }
-        catch(IOException e){
+            //higher output to check latency
+            if (payload != null) {
+                mWebSocket.sendBinary(payload);
+                mWebSocket.flush();
+            }
+        } catch (IOException e) {
             Log.e(TAG, e.getMessage());
             return;
-        }
-        finally {
+        } finally {
             baos.reset();
-            try { dos.close(); }
-            catch(IOException e){}
+            try {
+                dos.close();
+            } catch (IOException e) {
+            }
         }
     }
+
+    private long mServerDrift = 0;
+    private long mCount = 0;
+    private Object lock = new Object();
 
     @Override
     public void onConnected(WebSocket websocket, Map<String, List<String>> headers) {
@@ -256,26 +269,33 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
 
     @Override
     public void onTextMessage(WebSocket websocket, String text) throws Exception {
-        try{
+        try {
             JSONObject obj = new JSONObject(text);
-            if (obj.has("type")){
-                if (obj.get("type").equals("reset")){
+            if (obj.has("type")) {
+                Object type = obj.get("type");
+                if (type.equals("reset")) {
                     if (obj.has("width")
                             && obj.has("height")
-                            && obj.has("bitrate")){
+                            && obj.has("bitrate")) {
                         final int width = obj.getInt("width");
                         final int height = obj.getInt("height");
                         final int bitrate = obj.getInt("bitrate");
                         mMainHandler.post(new Runnable() {
                             @Override
                             public void run() {
-                                if (mListener != null) mListener.onResetReceived(width, height, bitrate);
+                                if (mListener != null)
+                                    mListener.onResetReceived(width, height, bitrate);
                             }
                         });
                     }
+                } else if (type.equals("sync")) {
+                    synchronized (lock) {
+                        mServerDrift = (obj.getLong("timestamp") - System.currentTimeMillis());
+                    }
                 }
             }
-        }catch(JSONException e){}
+        } catch (JSONException e) {
+        }
     }
 
     @Override
@@ -339,8 +359,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
 
                 double toSendValue = (double) totalBytesToSend.get();
                 double sentValue = (double) totalSentBytes.get();
-                Log.d(TAG, "SENT: "+contSent.get()+" TO SEND: "+contToSend.get());
-                if (toSendValue > 0){
+                if (toSendValue > 0) {
                     double ratio = sentValue / toSendValue * 100.0;
                     double percentage = Math.round(ratio * 100.0) / 100.0;
                     double millis = (double) (System.currentTimeMillis() - startTime);

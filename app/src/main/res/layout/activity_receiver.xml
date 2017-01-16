@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:orientation="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     tools:context=".receiver.ui.ReceiverMainActivity">
     <!--
     <android.support.v7.widget.Toolbar
@@ -16,36 +15,50 @@
         app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
 -->
     <LinearLayout
-        android:layout_marginTop="@dimen/activity_vertical_margin"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:layout_marginBottom="@dimen/activity_vertical_margin"
         android:layout_marginLeft="@dimen/activity_horizontal_margin"
         android:layout_marginRight="@dimen/activity_horizontal_margin"
-        android:orientation="vertical"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_marginTop="@dimen/activity_vertical_margin"
+        android:orientation="vertical">
+
         <LinearLayout
-            android:orientation="vertical"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
             <Button
-                android:layout_gravity="center_horizontal"
                 android:id="@+id/connect_button"
-                android:text="connect"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-            <TextView
+                android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
-                android:textColor="@android:color/white"
+                android:text="connect" />
+
+            <TextView
                 android:id="@+id/encoding_details_tv"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:textColor="@android:color/white" />
         </LinearLayout>
+
         <SurfaceView
             android:id="@+id/output_view"
-            android:layout_gravity="center_horizontal"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_width="640dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal" />
 
     </LinearLayout>
 
-</LinearLayout>
+    <TextView
+        android:id="@+id/delay_details"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="20dp"
+        android:text="d"
+        android:layout_gravity="center_horizontal"
+        android:textColor="@android:color/white" />
+</RelativeLayout>

@@ -1,16 +1,12 @@
 package it.polito.mec.video.raven.receiver.ui;
 
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -22,6 +18,7 @@ import android.widget.Toast;
 
 import it.polito.mec.video.raven.R;
 import it.polito.mec.video.raven.VideoChunks;
+import it.polito.mec.video.raven.network_delay.Sync;
 import it.polito.mec.video.raven.receiver.DecoderThread;
 import it.polito.mec.video.raven.receiver.net.WSClientImpl;
 
@@ -29,63 +26,78 @@ import it.polito.mec.video.raven.receiver.net.WSClientImpl;
 public class ReceiverMainActivity extends AppCompatActivity {
 
     private Button mConnectionButton;
-    private TextView mEncodingDetails;
-
+    private TextView mEncodingDetails, delayDetails;
     private Surface mSurface;
     private DecoderThread mDecoderTask;
 
     private PowerManager.WakeLock wakeLock;
     private SharedPreferences mPreferences;
 
-    private WSClientImpl mClient = new WSClientImpl(new WSClientImpl.Listener() {
-        @Override
-        public void onConnectionLost(boolean closedByServer) {
-            setupConnectionButton(true);
-        }
-
-        @Override
-        public void onConnectionEstablished() {
-            Toast.makeText(ReceiverMainActivity.this, "Connected", Toast.LENGTH_LONG).show();
-            setupConnectionButton(false);
-        }
-
-        @Override
-        public void onConnectionFailed(Exception e) {
-            Toast.makeText(ReceiverMainActivity.this, "Can't connect to server: "
-                    + e.getClass().getSimpleName()+": "+e.getMessage(), Toast.LENGTH_LONG).show();
-
-        }
-
-        @Override
-        public void onConfigParamsReceived(byte[] configParams, final int width, final int height, final int bitrate) {
-            Log.d("ACT", "config bytes["+configParams.length+"] ; " +
-                    "resolution: "+width+"x"+height+" "+bitrate+" Kbps");
-            stopDecoder();
-            startDecoder(width, height);
-            mEncodingDetails.post(new Runnable() {
-                @Override
-                public void run() {
-                    mEncodingDetails.setText(String.format("(%dx%d) %d Kbps", width, height, bitrate));
-                }
-            });
-
-            mDecoderTask.setConfigurationBuffer(configParams);
-        }
-
-        @Override
-        public void onStreamChunkReceived(byte[] chunk, int flags, long timestamp) {
-            VideoChunks.Chunk c = new VideoChunks.Chunk(chunk, flags, timestamp);
-            mDecoderTask.submitEncodedData(c);
-        }
-    });
+    private WSClientImpl mClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_receiver);
 
+        mClient = new WSClientImpl(new WSClientImpl.Listener() {
+            @Override
+            public void onConnectionLost(boolean closedByServer) {
+                setupConnectionButton(true);
+            }
+
+            @Override
+            public void onConnectionEstablished() {
+                Toast.makeText(ReceiverMainActivity.this, "Connected", Toast.LENGTH_LONG).show();
+                setupConnectionButton(false);
+            }
+
+            @Override
+            public void onConnectionFailed(Exception e) {
+                Toast.makeText(ReceiverMainActivity.this, "Can't connect to server: "
+                        + e.getClass().getSimpleName() + ": " + e.getMessage(), Toast.LENGTH_LONG).show();
+
+            }
+
+            @Override
+            public void onConfigParamsReceived(byte[] configParams, final int width, final int height, final int bitrate) {
+                Log.d("ACT", "config bytes[" + configParams.length + "] ; " +
+                        "resolution: " + width + "x" + height + " " + bitrate + " Kbps");
+                stopDecoder();
+                startDecoder(width, height, configParams);
+                mEncodingDetails.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        mEncodingDetails.setText(String.format("(%dx%d) %d Kbps", width, height, bitrate));
+                    }
+                });
+            }
+
+            int counter = 0;
+            private long mLatency = 0;
+
+            @Override
+            public void onStreamChunkReceived(byte[] chunk, int flags, long timestamp, long latency) {
+                mLatency = (mLatency * 10 + latency) / 11;
+
+                VideoChunks.Chunk c = new VideoChunks.Chunk(chunk, flags, timestamp);
+                mDecoderTask.submitEncodedData(c);
+
+                if (counter++ % 10 == 0) {
+
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            delayDetails.setText("D : " + mLatency);
+                        }
+                    });
+                }
+            }
+        }, (Sync) getApplication());
+
         mConnectionButton = (Button) findViewById(R.id.connect_button);
         mEncodingDetails = (TextView) findViewById(R.id.encoding_details_tv);
+        delayDetails = (TextView) findViewById(R.id.delay_details);
         //Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         //setSupportActionBar(toolbar);
 
@@ -122,22 +134,24 @@ public class ReceiverMainActivity extends AppCompatActivity {
         mPreferences = PreferenceManager.getDefaultSharedPreferences(this);
     }
 
-    private void setupConnectionButton(boolean connect){
+    private void setupConnectionButton(boolean connect) {
         String text = connect ? "Connect" : "Disconnect";
         View.OnClickListener listener;
-        if (connect){
+        if (connect) {
             listener = new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     String ip = mPreferences.getString(getString(R.string.pref_key_server_ip),
                             getString(R.string.pref_server_ip_default_value));
-                    int port = Integer.parseInt(mPreferences.getString(getString(R.string.pref_key_server_port),
-                            getString(R.string.pref_server_port_default_value)));
+                    String port_s = mPreferences.getString(getString(R.string.pref_key_server_port),
+                            getString(R.string.pref_server_port_default_value));
+                    int port = Integer.parseInt(port_s);
+
+                    ((Sync) getApplication()).setRemoteSyncUrl(ip, port_s);
                     mClient.connect(ip, port, 2000);
                 }
             };
-        }
-        else{
+        } else {
             listener = new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -149,49 +163,32 @@ public class ReceiverMainActivity extends AppCompatActivity {
         mConnectionButton.setOnClickListener(listener);
     }
 
-    /*
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return super.onCreateOptionsMenu(menu);
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch(item.getItemId()){
-            case R.id.action_settings:
-                Intent intent = new Intent(this, SettingsActivity.class);
-                startActivity(intent);
-                break;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-    */
-
     @Override
     protected void onPause() {
         stopDecoder();
-        if (mClient.getSocket() != null){
+        if (mClient.getSocket() != null) {
             mClient.closeConnection();
         }
         wakeLock.release();
         super.onPause();
     }
 
-    private void startDecoder(int width, int height){
-        if (mDecoderTask == null){
+    private void startDecoder(int width, int height, byte[] configParams) {
+        if (mDecoderTask == null) {
             mDecoderTask = new DecoderThread(width, height);
             mDecoderTask.setSurface(mSurface);
+            mDecoderTask.setConfigurationBuffer(configParams);
             mDecoderTask.start();
         }
     }
 
-    private void stopDecoder(){
-        if (mDecoderTask != null){
+    private void stopDecoder() {
+        if (mDecoderTask != null) {
             mDecoderTask.interrupt();
-            try{
+            try {
                 mDecoderTask.join();
-            }catch(InterruptedException e){}
+            } catch (InterruptedException e) {
+            }
             mDecoderTask = null;
         }
     }

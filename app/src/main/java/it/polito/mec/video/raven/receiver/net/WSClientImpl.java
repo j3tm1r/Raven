@@ -1,5 +1,6 @@
 package it.polito.mec.video.raven.receiver.net;
 
+import android.app.Application;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
@@ -15,8 +16,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
+
+import it.polito.mec.video.raven.RavenApplication;
+import it.polito.mec.video.raven.network_delay.Sync;
 
 /**
  * Manages a {@link WebSocket} inside a background thread
@@ -31,18 +34,24 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
 
     public interface Listener {
         void onConnectionLost(boolean closedByServer);
+
         void onConnectionEstablished();
+
         void onConnectionFailed(Exception e);
+
         void onConfigParamsReceived(byte[] configParams, int w, int h, int bitrate);
-        void onStreamChunkReceived(byte[] chunk, int flags, long timestamp);
+
+        void onStreamChunkReceived(byte[] chunk, int flags, long timestamp, long latency);
     }
 
     private WebSocket mWebSocket;
     private Listener mListener;
+    private Sync syncClient;
 
-    public WSClientImpl(Listener listener){
+    public WSClientImpl(Listener listener, Sync syncClient) {
         mMainHandler = new Handler(Looper.getMainLooper());
         mListener = listener;
+        this.syncClient = syncClient;
     }
 
     @Override
@@ -87,7 +96,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         mWebSocket.sendClose();
     }
 
-    public void sendHello(){
+    public void sendHello() {
         try {
             JSONObject configMsg = JSONMessageFactory.createHelloMessage();
             mWebSocket.sendText(configMsg.toString());
@@ -96,7 +105,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         }
     }
 
-    public void requestConfigParams(){
+    public void requestConfigParams() {
         try {
             JSONObject configMsg = JSONMessageFactory.createConfigRequestMessage();
             mWebSocket.sendText(configMsg.toString());
@@ -105,33 +114,38 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         }
     }
 
+    private long mServerDrift = 0;
+    private long mCount = 0;
+    private Object lock = new Object();
+
     @Override
     public void onTextMessage(WebSocket websocket, String text) throws Exception {
         JSONObject obj = null;
-        try{
+        try {
             obj = new JSONObject(text);
-            if (obj.has("type")){
+            if (obj.has("type")) {
                 Object type = obj.get("type");
                 if (type.equals("config")) {
-                    if (VERBOSE) Log.d(TAG, "Received config from server: "+text);
+                    if (VERBOSE) Log.d(TAG, "Received config from server: " + text);
                     String sParams = obj.getString("configArray");
                     int width = obj.getInt("width");
                     int height = obj.getInt("height");
                     int Kbps = obj.getInt("encodeBps");
                     final byte[] params = Base64.decode(sParams, Base64.DEFAULT);
-                    if (mListener != null) mListener.onConfigParamsReceived(params, width, height, Kbps);
-                }
-                else if (type.equals("stream")){
+                    if (mListener != null)
+                        mListener.onConfigParamsReceived(params, width, height, Kbps);
+                } else if (type.equals("stream")) {
                     String sChunk = obj.getString("data");
                     final byte[] chunk = Base64.decode(sChunk, Base64.DEFAULT);
                     final int flags = obj.getInt("flags");
                     final long timestamp = obj.getLong("ts");
-                    if (mListener != null) mListener.onStreamChunkReceived(chunk, flags, timestamp);
+                    final long latency = 0;
+                    if (mListener != null)
+                        mListener.onStreamChunkReceived(chunk, flags, timestamp, latency);
                 }
             }
-        }
-        catch(JSONException e){
-            Log.e(TAG, "Can't parse JSON from text: "+text);
+        } catch (JSONException e) {
+            Log.e(TAG, "Can't parse JSON from text: " + text);
         }
 
     }
@@ -150,15 +164,18 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         if (mListener != null) mListener.onStreamChunkReceived(data, flag, ts);*/
     }
 
+    private long std_latency = 0;
+
     @Override
     public void onBinaryMessage(WebSocket websocket, byte[] payload) throws Exception {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(payload));
         int flag = dis.readInt();
         long ts = dis.readLong();
+        long latency = (System.currentTimeMillis() + syncClient.getDrift() - ts);
         int remaining = payload.length - STREAM_HEADER_SIZE;
         byte[] data = new byte[remaining];
         dis.read(data);
-        if (mListener != null) mListener.onStreamChunkReceived(data, flag, ts);
+        if (mListener != null) mListener.onStreamChunkReceived(data, flag, ts, latency);
     }
 
     @Override
