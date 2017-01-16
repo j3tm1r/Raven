@@ -124,11 +124,13 @@ public class PreviewFragment extends Fragment {
 
     };
 
+    private VideoListener mVideoReceiverLocal;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mPreferences = PreferenceManager.getDefaultSharedPreferences(getContext());
-        mClient = new WSClientImpl(mWebSocketListener, (Sync) getActivity().getApplication());
+        mClient = new WSClientImpl(mWebSocketListener, (Sync) getActivity().getApplication(), mVideoReceiverLocal);
         mRecorder = new NativeRecorderImpl(getContext());
     }
 
@@ -311,4 +313,7 @@ public class PreviewFragment extends Fragment {
         mConnect.setOnClickListener(listener);
     }
 
+    public void setVideoListener(VideoListener videoReceiverLocal) {
+        mVideoReceiverLocal = videoReceiverLocal;
+    }
 }

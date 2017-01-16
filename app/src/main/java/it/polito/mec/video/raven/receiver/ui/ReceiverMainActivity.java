@@ -121,15 +121,7 @@ public class ReceiverMainActivity extends AppCompatActivity {
 
         setupConnectionButton(true);
 
-        outputView.post(new Runnable() {
-            @Override
-            public void run() {
-                int measuredHeight = outputView.getMeasuredHeight();
-                ViewGroup.LayoutParams lp = outputView.getLayoutParams();
-                lp.width = measuredHeight * 4 / 3;
-                outputView.setLayoutParams(lp);
-            }
-        });
+
 
         mPreferences = PreferenceManager.getDefaultSharedPreferences(this);
     }

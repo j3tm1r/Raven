@@ -23,6 +23,7 @@ import it.polito.mec.video.raven.VideoChunks;
 import it.polito.mec.video.raven.network_delay.Sync;
 import it.polito.mec.video.raven.sender.Util;
 import it.polito.mec.video.raven.sender.encoding.*;
+import it.polito.mec.video.raven.sender.ui.VideoListener;
 
 /**
  * Manages a {@link WebSocket} inside a background thread
@@ -34,12 +35,17 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     private static final String TAG = "WSClient";
     private static final String WS_URI_FORMAT = "ws://%s:%d";
     private static final String HTTP_URI_FORMAT = "http://%s:%d";
+    private final VideoListener mLocalVideoListener;
 
     public interface Listener {
         void onConnectionEstablished(String uri);
+
         void onConnectionLost(boolean closedByServer);
+
         void onConnectionFailed(Exception e);
+
         void onResetReceived(int w, int h, int kbps);
+
         void onBandwidthChange(int Kbps, double performancesPercentage);
     }
 
@@ -52,10 +58,11 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     private Sync syncClient;
 
 
-    public WSClientImpl(Listener listener, Sync syncClient) {
+    public WSClientImpl(Listener listener, Sync syncClient, VideoListener localVideoListener) {
         mMainHandler = new Handler(Looper.getMainLooper());
         mMeasureThread = new BandwidthMeasureThread();
         mListener = listener;
+        mLocalVideoListener = localVideoListener;
         this.syncClient = syncClient;
     }
 
@@ -71,6 +78,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
 
     @Override
     public void onConfigHeaders(VideoChunks.Chunk chunk, Params params) {
+        mLocalVideoListener.onConfigParamsReceived(chunk.data, params.width(), params.height(), params.bitrate());
         if (isOpen()) {
             sendConfigBytes(chunk.data, params.width(), params.height(), params.bitrate(), params.frameRate());
         }
@@ -78,6 +86,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
 
     @Override
     public void onEncodedChunk(VideoChunks.Chunk chunk) {
+        mLocalVideoListener.onStreamChunkReceived(chunk.data, chunk.flags, chunk.presentationTimestampUs, 0);
         if (isOpen()) {
             sendStreamBytes(chunk, syncClient.getDrift());
         }
@@ -302,7 +311,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     public void onFrameSent(WebSocket websocket, final WebSocketFrame frame) throws Exception {
         super.onFrameSent(websocket, frame);
         if (frame.isDataFrame()) {
-            if (contSent.get() == 0){
+            if (contSent.get() == 0) {
                 mMeasureThread.start();
             }
             totalSentBytes.addAndGet(frame.getPayloadLength());
@@ -310,40 +319,47 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         }
     }
 
-    private AtomicLong totalSentBytes = new AtomicLong(0), contSent = new AtomicLong(0) ;
+    private AtomicLong totalSentBytes = new AtomicLong(0), contSent = new AtomicLong(0);
     private AtomicLong totalBytesToSend = new AtomicLong(0), contToSend = new AtomicLong(0);
     private BandwidthMeasureThread mMeasureThread;
     private AtomicBoolean mPostBandwidthChange = new AtomicBoolean(true);
 
-    public void setBandWidthMeasureEnabled(boolean b){
+    public void setBandWidthMeasureEnabled(boolean b) {
         mPostBandwidthChange.set(b);
-        if (VERBOSE) Log.d(TAG, "set post= "+b);
+        if (VERBOSE) Log.d(TAG, "set post= " + b);
     }
 
     class BandwidthMeasureThread implements Runnable {
         private Thread mWorkerThread;
         private boolean mPauseRequest;
         private double mPercentage = 100;
-        BandwidthMeasureThread(){
-            synchronized (this){
+
+        BandwidthMeasureThread() {
+            synchronized (this) {
                 mPauseRequest = false;
             }
         }
-        void start(){
+
+        void start() {
             if (mWorkerThread != null) return;
             mWorkerThread = new Thread(this, getClass().getName());
             mWorkerThread.start();
         }
-        void stopAndWait(){
+
+        void stopAndWait() {
             if (mWorkerThread == null) return;
             mWorkerThread.interrupt();
-            try{ mWorkerThread.join(); } catch (InterruptedException e){}
+            try {
+                mWorkerThread.join();
+            } catch (InterruptedException e) {
+            }
             mWorkerThread = null;
         }
+
         @Override
         public void run() {
             long startTime = System.currentTimeMillis();
-            while (!Thread.interrupted()){
+            while (!Thread.interrupted()) {
                 try {
                     Thread.sleep(5000);
                     synchronized (this) {
@@ -352,8 +368,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
                             wait();
                         }
                     }
-                }
-                catch(InterruptedException e) {
+                } catch (InterruptedException e) {
                     break;
                 }
 
@@ -364,11 +379,11 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
                     double percentage = Math.round(ratio * 100.0) / 100.0;
                     double millis = (double) (System.currentTimeMillis() - startTime);
                     double elapsedSeconds = millis / 1000.0;
-                    int Bps = (int)(sentValue / elapsedSeconds);
+                    int Bps = (int) (sentValue / elapsedSeconds);
                     final int Kbps = Bps * 8 / 1000;
                     mPercentage = Math.min(percentage, 100);    //in case it exceeds 100.0
                     if (mPostBandwidthChange.get()) {
-                        if (VERBOSE) Log.d(TAG, Kbps+" Kbps "+mPercentage+" %");
+                        if (VERBOSE) Log.d(TAG, Kbps + " Kbps " + mPercentage + " %");
                         mMainHandler.post(new Runnable() {
                             @Override
                             public void run() {
@@ -384,7 +399,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
             if (VERBOSE) Log.d(TAG, "STOP BW MEASURE");
         }
 
-        synchronized void setPause(boolean b){
+        synchronized void setPause(boolean b) {
             mPauseRequest = b;
             notifyAll();
         }

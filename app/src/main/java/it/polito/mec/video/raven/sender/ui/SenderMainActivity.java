@@ -1,15 +1,11 @@
 package it.polito.mec.video.raven.sender.ui;
 
 import android.content.Context;
-import android.content.Intent;
 import android.os.PowerManager;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -31,8 +27,13 @@ public class SenderMainActivity extends AppCompatActivity {
         //setSupportActionBar(toolbar);
         ViewPager viewPager = (ViewPager) findViewById(R.id.view_pager);
         mAdapter = new ViewPagerAdapter(getSupportFragmentManager());
-        mAdapter.addFrag(new PreviewFragment(),"tab1");
-        mAdapter.addFrag(new Page2Fragment(), "tab2");
+        PreviewFragment previewFragment = new PreviewFragment();
+        PreviewRecordedVideoFragment previewRecordedVideoFragment = new PreviewRecordedVideoFragment();
+
+        previewFragment.setVideoListener(previewRecordedVideoFragment.getVideoReceiverLocal());
+        mAdapter.addFrag(previewFragment, "tab1");
+        mAdapter.addFrag(previewRecordedVideoFragment, "tab3");
+//        mAdapter.addFrag(new Page2Fragment(), "tab2");
         viewPager.setAdapter(mAdapter);
     }
 
@@ -72,7 +73,7 @@ public class SenderMainActivity extends AppCompatActivity {
     }
 */
 
-    public static void registerExceptionHandler(){
+    public static void registerExceptionHandler() {
         Thread.setDefaultUncaughtExceptionHandler(new ExceptionHandler());
     }
 
