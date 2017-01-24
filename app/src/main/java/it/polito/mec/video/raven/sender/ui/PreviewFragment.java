@@ -36,7 +36,7 @@ public class PreviewFragment extends Fragment {
     private static final String TAG = "PREVIEW";
 
     private static final int CAMERA_PERMISSION_REQUEST_CODE = 1;
-    private static final String[] PERMISSIONS = new String[]{Manifest.permission.CAMERA};
+    private static final String[] PERMISSIONS = new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE};
     //By default, camera permission is granted.
     //If current API is >= 23, it is denied until user explicitly grants it
     private boolean mCameraPermissionGranted = (Build.VERSION.SDK_INT < 23);
@@ -54,6 +54,9 @@ public class PreviewFragment extends Fragment {
     private WSClientImpl.Listener mWebSocketListener = new WSClientImpl.Listener() {
         @Override
         public void onConnectionEstablished(String uri) {
+
+            ((Sync) getActivity().getApplication()).setRemoteSyncUrl(serverIp, serverPort_s);
+
             mClient.setBandWidthMeasureEnabled(mAutoDetectQuality);
             mRecorder.registerEncodingListener(mClient, null);
 
@@ -70,12 +73,15 @@ public class PreviewFragment extends Fragment {
 
         @Override
         public void onConnectionFailed(Exception e) {
-            Toast.makeText(getContext(), "Can't mConnect to server: "
-                    + e.getMessage(), Toast.LENGTH_LONG).show();
+            if (getActivity() != null)
+                Toast.makeText(getActivity(), "Connection error : "
+                        + e.getMessage(), Toast.LENGTH_LONG).show();
         }
 
         @Override
         public void onConnectionLost(boolean closedByServer) {
+            Toast.makeText(getContext(), "Connection lost : closed by server " + closedByServer, Toast.LENGTH_LONG).show();
+            ((Sync) getActivity().getApplication()).stopSyncing();
             mRecorder.unregisterEncodingListener(mClient);
 
             setupConnectionButton(true);
@@ -125,6 +131,9 @@ public class PreviewFragment extends Fragment {
     };
 
     private VideoListener mVideoReceiverLocal;
+    private View.OnClickListener connectButtonListener;
+    private String serverPort_s;
+    private String serverIp;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -246,6 +255,7 @@ public class PreviewFragment extends Fragment {
         });
         setupConnectionButton(true);
 
+
         mRecorder.openCamera();
         mRecorder.setSurfaceView(preview);
 
@@ -280,28 +290,26 @@ public class PreviewFragment extends Fragment {
         return true;
     }
 
-
     private void setupConnectionButton(boolean connect) {
         String text = connect ? "Connect" : "Disconnect";
-        View.OnClickListener listener;
         if (connect) {
-            listener = new View.OnClickListener() {
+            connectButtonListener = new View.OnClickListener() {
+
                 @Override
                 public void onClick(View v) {
                     //mRecorder.pauseRecording();
-                    String ip = mPreferences.getString(getString(R.string.pref_key_server_ip),
+
+                    serverIp = mPreferences.getString(getString(R.string.pref_key_server_ip),
                             getString(R.string.pref_server_ip_default_value));
-                    String port_s = mPreferences.getString(getString(R.string.pref_key_server_port),
+                    serverPort_s = mPreferences.getString(getString(R.string.pref_key_server_port),
                             getString(R.string.pref_server_port_default_value));
-                    int port = Integer.parseInt(port_s);
+                    int port = Integer.parseInt(serverPort_s);
 
-                    ((Sync) getActivity().getApplication()).setRemoteSyncUrl(ip, port_s);
-
-                    mClient.connect(ip, port, 2000);
+                    mClient.connect(serverIp, port, 2000);
                 }
             };
         } else {
-            listener = new View.OnClickListener() {
+            connectButtonListener = new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     mRecorder.pauseRecording();
@@ -310,7 +318,7 @@ public class PreviewFragment extends Fragment {
             };
         }
         mConnect.setText(text);
-        mConnect.setOnClickListener(listener);
+        mConnect.setOnClickListener(connectButtonListener);
     }
 
     public void setVideoListener(VideoListener videoReceiverLocal) {

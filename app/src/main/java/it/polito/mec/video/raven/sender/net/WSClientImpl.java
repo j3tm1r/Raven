@@ -111,11 +111,21 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
         return mWebSocket != null && mWebSocket.isOpen();
     }
 
+    private Thread connectionThread;
+
     @Override
     public void connect(final String serverIP, final int port, final int timeout) {
         mServerIP = serverIP;
         mPort = port;
-        new Thread(new Runnable() {
+        if(connectionThread != null){
+            mMainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (mListener != null) mListener.onConnectionFailed(new Exception("Already performing a connection"));
+                }
+            });
+        }
+        connectionThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
@@ -126,6 +136,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
                     mWebSocket.addHeader("rule", "pub");
                     mWebSocket.connect();
                 } catch (final Exception e) {
+                    connectionThread = null;
                     mMainHandler.post(new Runnable() {
                         @Override
                         public void run() {
@@ -135,7 +146,9 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
                     return;
                 }
             }
-        }).start();
+        });
+
+        connectionThread.start();
     }
 
     @Override
@@ -245,6 +258,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
     public void onConnected(WebSocket websocket, Map<String, List<String>> headers) {
         final String mConnectURI = String.format(WS_URI_FORMAT, mServerIP, mPort);
         if (VERBOSE) Log.d(TAG, "Successfully connected to " + mConnectURI);
+        connectionThread = null;
         mMainHandler.post(new Runnable() {
             @Override
             public void run() {
@@ -255,6 +269,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
 
     @Override
     public void onConnectError(WebSocket websocket, final WebSocketException exception) throws Exception {
+        connectionThread = null;
         mMainHandler.post(new Runnable() {
             @Override
             public void run() {

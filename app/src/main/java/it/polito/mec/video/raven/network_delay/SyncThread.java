@@ -30,9 +30,9 @@ public class SyncThread extends Thread {
     public final MediaType JSON
             = MediaType.parse("application/json; charset=utf-8");
 
-    private int SYNC_INTERVAL = 5000;
+    private int SYNC_INTERVAL = 50000;
     private String mRemoteUrl = "http://" + "192.168.1.32:9090" + "/time";
-    private Object lock = new Object();
+    private final Object lock = new Object();
 
     private SyncMessage mSyncMessage = new SyncMessage();
     private long drift;
@@ -72,7 +72,6 @@ public class SyncThread extends Thread {
     public void run() {
         while (!Thread.interrupted()) {
             try {
-
                 synchronized (lock) {
                     mSyncMessage.timestamp_t0 = System.currentTimeMillis();
                     mSyncMessage = mGson.fromJson(post(mRemoteUrl, mGson.toJson(mSyncMessage)), SyncMessage.class);

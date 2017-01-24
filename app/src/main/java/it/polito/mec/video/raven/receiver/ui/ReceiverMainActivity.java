@@ -11,7 +11,6 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -34,6 +33,8 @@ public class ReceiverMainActivity extends AppCompatActivity {
     private SharedPreferences mPreferences;
 
     private WSClientImpl mClient;
+    private String serverIp;
+    private String serverPort_s;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,12 +44,15 @@ public class ReceiverMainActivity extends AppCompatActivity {
         mClient = new WSClientImpl(new WSClientImpl.Listener() {
             @Override
             public void onConnectionLost(boolean closedByServer) {
+                Toast.makeText(ReceiverMainActivity.this, "Connection lost : closed by server " + closedByServer, Toast.LENGTH_LONG).show();
+                ((Sync) getApplication()).stopSyncing();
                 setupConnectionButton(true);
             }
 
             @Override
             public void onConnectionEstablished() {
                 Toast.makeText(ReceiverMainActivity.this, "Connected", Toast.LENGTH_LONG).show();
+                ((Sync) getApplication()).setRemoteSyncUrl(serverIp, serverPort_s);
                 setupConnectionButton(false);
             }
 
@@ -133,14 +137,12 @@ public class ReceiverMainActivity extends AppCompatActivity {
             listener = new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    String ip = mPreferences.getString(getString(R.string.pref_key_server_ip),
+                    serverIp = mPreferences.getString(getString(R.string.pref_key_server_ip),
                             getString(R.string.pref_server_ip_default_value));
-                    String port_s = mPreferences.getString(getString(R.string.pref_key_server_port),
+                    serverPort_s = mPreferences.getString(getString(R.string.pref_key_server_port),
                             getString(R.string.pref_server_port_default_value));
-                    int port = Integer.parseInt(port_s);
-
-                    ((Sync) getApplication()).setRemoteSyncUrl(ip, port_s);
-                    mClient.connect(ip, port, 2000);
+                    int port = Integer.parseInt(serverPort_s);
+                    mClient.connect(serverIp, port, 2000);
                 }
             };
         } else {

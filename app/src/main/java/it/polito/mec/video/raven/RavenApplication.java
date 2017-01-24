@@ -30,12 +30,21 @@ public class RavenApplication extends Application implements Sync {
     public void onCreate() {
         GsonBuilder builder = new GsonBuilder();
         mGson = builder.create();
-        mSyncThread = new SyncThread(mGson);
-        mSyncThread.start();
     }
 
     public void setRemoteSyncUrl(String ip, String port) {
+        if (mSyncThread != null) {
+            mSyncThread.interrupt();
+            mSyncThread = null;
+        }
+        mSyncThread = new SyncThread(mGson);
         mSyncThread.setRemoteUrl(ip, port);
+        mSyncThread.start();
+    }
+
+    @Override
+    public void logFrameDelay(int dealyMillis) {
+
     }
 
     public void startSyncing() {
@@ -47,7 +56,7 @@ public class RavenApplication extends Application implements Sync {
         try {
             mSyncThread.join();
         } catch (InterruptedException ex) {
-            
+
         }
     }
 
