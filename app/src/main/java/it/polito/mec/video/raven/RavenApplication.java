@@ -1,21 +1,12 @@
 package it.polito.mec.video.raven;
 
 import android.app.Application;
-import android.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import java.io.IOException;
-import java.util.Arrays;
-
 import it.polito.mec.video.raven.network_delay.Sync;
 import it.polito.mec.video.raven.network_delay.SyncThread;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 /**
  * Created by Jetmir on 11/01/2017.

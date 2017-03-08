@@ -7,6 +7,8 @@ package it.polito.mec.video.raven.network_delay;
 public interface Sync {
     void setRemoteSyncUrl(String ip, String port);
 
+    void logFrameDelay(int dealyMillis);
+
     void startSyncing();
 
     void stopSyncing();

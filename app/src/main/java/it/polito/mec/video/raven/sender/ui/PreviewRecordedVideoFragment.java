@@ -40,12 +40,15 @@ public class PreviewRecordedVideoFragment extends Fragment {
 
     private SurfaceView outputView;
     private VideoListener mClient;
+    private View qualityView;
 
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         RelativeLayout rootLayout = (RelativeLayout) inflater.inflate(R.layout.fragment_preview_video, container, false);
         outputView = (SurfaceView) rootLayout.findViewById(R.id.output_view);
+        qualityView = rootLayout.findViewById(R.id.quality_indicator);
+        qualityView.setVisibility(View.INVISIBLE);
         outputView.getHolder().addCallback(new SurfaceHolder.Callback() {
 
             @Override
@@ -93,6 +96,26 @@ public class PreviewRecordedVideoFragment extends Fragment {
                 VideoChunks.Chunk c = new VideoChunks.Chunk(chunk, flags, timestamp);
                 mDecoderTask.submitEncodedData(c);
 
+            }
+
+            @Override
+            public void setQuality(String quality) {
+                if (quality != null) {
+                    switch (quality.toLowerCase()) {
+                        case "medium":
+                            qualityView.setBackgroundResource(R.drawable.round_yellow);
+                            break;
+                        case "low":
+                            qualityView.setBackgroundResource(R.drawable.round_red);
+                            break;
+                        case "high":
+                            qualityView.setBackgroundResource(R.drawable.round_green);
+                            break;
+                    }
+                    qualityView.setVisibility(View.VISIBLE);
+                } else {
+                    qualityView.setVisibility(View.INVISIBLE);
+                }
             }
         };
         return mClient;

@@ -16,6 +16,7 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -109,7 +110,7 @@ public class PreviewFragment extends Fragment {
         }
 
         @Override
-        public void onResetReceived(int w, int h, int kbps) {
+        public void onResetReceived(int w, int h, int kbps, String quality) {
             if (mAutoDetectQuality) {
                 Log.d(TAG, "Ignoring RESET from server: Auto detect quality enabled");
                 return;
@@ -117,6 +118,23 @@ public class PreviewFragment extends Fragment {
             Params newParams = new Params.Builder().width(w).height(h).bitRate(kbps).build();
             if (mRecorder.getPresets().contains(newParams)) {
                 mRecorder.switchToVideoQuality(newParams);
+                if (quality != null) {
+                    switch (quality.toLowerCase()) {
+                        case "medium":
+                            qualityView.setBackgroundResource(R.drawable.round_yellow);
+                            break;
+                        case "low":
+                            qualityView.setBackgroundResource(R.drawable.round_red);
+                            break;
+                        case "high":
+                            qualityView.setBackgroundResource(R.drawable.round_green);
+                            break;
+                    }
+                    qualityView.setVisibility(View.VISIBLE);
+                } else {
+                    qualityView.setVisibility(View.INVISIBLE);
+                }
+                mVideoReceiverLocal.setQuality(quality);
                 return;
             }
             List<Params> compatibleParams = Params.getNearestPresets(newParams.getSize());
@@ -126,6 +144,7 @@ public class PreviewFragment extends Fragment {
             }
             Params target = compatibleParams.get(compatibleParams.size() - 1);
             mRecorder.switchToVideoQuality(target);
+
         }
 
     };
@@ -134,6 +153,8 @@ public class PreviewFragment extends Fragment {
     private View.OnClickListener connectButtonListener;
     private String serverPort_s;
     private String serverIp;
+    private RelativeLayout rootView;
+    private View qualityView;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -145,7 +166,10 @@ public class PreviewFragment extends Fragment {
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_preview, container, false);
+        rootView = (RelativeLayout) inflater.inflate(R.layout.fragment_preview, container, false);
+        qualityView = rootView.findViewById(R.id.quality_indicator);
+        qualityView.setVisibility(View.INVISIBLE);
+        return rootView;
     }
 
     @Override

@@ -42,6 +42,8 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
         void onConfigParamsReceived(byte[] configParams, int w, int h, int bitrate);
 
         void onStreamChunkReceived(byte[] chunk, int flags, long timestamp, long latency);
+
+        void onQualitychanged(String quality);
     }
 
     private WebSocket mWebSocket;
@@ -142,6 +144,8 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient {
                     final long latency = 0;
                     if (mListener != null)
                         mListener.onStreamChunkReceived(chunk, flags, timestamp, latency);
+                } else if(type.equals("reset")){
+                    mListener.onQualitychanged(obj.getString("quality"));
                 }
             }
         } catch (JSONException e) {

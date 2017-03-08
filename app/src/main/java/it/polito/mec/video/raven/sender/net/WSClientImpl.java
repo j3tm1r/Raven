@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-import it.polito.mec.video.raven.RavenApplication;
 import it.polito.mec.video.raven.VideoChunks;
 import it.polito.mec.video.raven.network_delay.Sync;
 import it.polito.mec.video.raven.sender.Util;
@@ -44,7 +43,7 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
 
         void onConnectionFailed(Exception e);
 
-        void onResetReceived(int w, int h, int kbps);
+        void onResetReceived(int w, int h, int kbps, String quality);
 
         void onBandwidthChange(int Kbps, double performancesPercentage);
     }
@@ -304,11 +303,12 @@ public class WSClientImpl extends WebSocketAdapter implements WSClient, Encoding
                         final int width = obj.getInt("width");
                         final int height = obj.getInt("height");
                         final int bitrate = obj.getInt("bitrate");
+                        final String quality = obj.getString("quality");
                         mMainHandler.post(new Runnable() {
                             @Override
                             public void run() {
                                 if (mListener != null)
-                                    mListener.onResetReceived(width, height, bitrate);
+                                    mListener.onResetReceived(width, height, bitrate, quality);
                             }
                         });
                     }

@@ -35,11 +35,15 @@ public class ReceiverMainActivity extends AppCompatActivity {
     private WSClientImpl mClient;
     private String serverIp;
     private String serverPort_s;
+    private View qualityView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_receiver);
+
+        qualityView = findViewById(R.id.quality_indicator);
+        qualityView.setVisibility(View.INVISIBLE);
 
         mClient = new WSClientImpl(new WSClientImpl.Listener() {
             @Override
@@ -95,6 +99,26 @@ public class ReceiverMainActivity extends AppCompatActivity {
                             delayDetails.setText("D : " + mLatency);
                         }
                     });
+                }
+            }
+
+            @Override
+            public void onQualitychanged(String quality) {
+                if (quality != null) {
+                    switch (quality.toLowerCase()) {
+                        case "medium":
+                            qualityView.setBackgroundResource(R.drawable.round_yellow);
+                            break;
+                        case "low":
+                            qualityView.setBackgroundResource(R.drawable.round_red);
+                            break;
+                        case "high":
+                            qualityView.setBackgroundResource(R.drawable.round_green);
+                            break;
+                    }
+                    qualityView.setVisibility(View.VISIBLE);
+                } else {
+                    qualityView.setVisibility(View.INVISIBLE);
                 }
             }
         }, (Sync) getApplication());
